@@ -30,6 +30,7 @@
 #include "qcom_dsp.h"
 #include <unistd.h>
 #include <ncurses.h>
+#include <stdio.h>
 
 static const char *domain_to_str(enum DspDomainId domain)
 {
@@ -47,15 +48,17 @@ int main(int argc, char *argv[])
 	enum DspDomainId domain = DSP_NPU0;
 	enum DspReturnCode ret;
 	int no_metrics = 0;
+	int use_tui = isatty(STDOUT_FILENO);
 
-	initscr();
-	noecho();
-	curs_set(FALSE);
-
-	//printf("Initializing DSP domain: %s\n", domain_to_str(domain));
+	if (use_tui) {
+		initscr();
+		noecho();
+		curs_set(FALSE);
+	}
 
 	ret = qcom_dsp_init(domain);
 	if (ret != RETURN_CODE_DSP_LIB_SUCCESS) {
+		if (use_tui) endwin();
 		fprintf(stderr, "qcom_dsp_init failed, ret=%d\n", ret);
 		return EXIT_FAILURE;
 	}
@@ -63,20 +66,29 @@ int main(int argc, char *argv[])
 	while(true) {
 		data = qcom_dsp_get_prof_data(domain, &no_metrics);
 		if (!data || no_metrics <= 0) {
+			if (use_tui) endwin();
 		    fprintf(stderr, "qcom_dsp_get_prof_data failed\n");
 		    qcom_dsp_deinit(domain);
 		    return EXIT_FAILURE;
 		}
-		// printf("Received %d metric set(s)\n", no_metrics);
 
-		/* For now, assume one metrics struct */
-		mvprintw(0, 0, "----------------- %s Stats---------------------\n", domain_to_str(domain));
-		mvprintw(1, 0, "Q6 Utilization        : %.2f %%\n", data->q6_utilization);
-		mvprintw(2, 0, "Q6 Clock              : %u KHz\n", data->q6_clock);
-		mvprintw(3, 0, "HVX Utilization       : %.2f %%\n", data->hvx_utilization);
-		mvprintw(4, 0, "HMX Utiliziation       : %.2f %%\n", data->hmx_utilization);
-		mvprintw(6, 0, "-------------------------------------------------\n");
-	        refresh();
+		if (use_tui) {
+			mvprintw(0, 0, "----------------- %s Stats---------------------\n", domain_to_str(domain));
+			mvprintw(1, 0, "Q6 Utilization        : %.2f %%\n", data->q6_utilization);
+			mvprintw(2, 0, "Q6 Clock              : %u KHz\n", data->q6_clock);
+			mvprintw(3, 0, "HVX Utilization       : %.2f %%\n", data->hvx_utilization);
+			mvprintw(4, 0, "HMX Utiliziation       : %.2f %%\n", data->hmx_utilization);
+			mvprintw(6, 0, "-------------------------------------------------\n");
+			refresh();
+		} else {
+			printf("%s q6_utilization=%.2f q6_clock=%u hvx_utilization=%.2f hmx_utilization=%.2f\n",
+				domain_to_str(domain),
+				data->q6_utilization,
+				data->q6_clock,
+				data->hvx_utilization,
+				data->hmx_utilization);
+			fflush(stdout);
+		}
 		sleep(1);
 	}
 
@@ -85,7 +97,6 @@ int main(int argc, char *argv[])
 	    fprintf(stderr, "qcom_dsp_deinit failed, ret=%d\n", ret);
 	    return EXIT_FAILURE;
 	}
-	endwin();
-	//printf("DSP deinitialized successfully\n");
+	if (use_tui) endwin();
 	return EXIT_SUCCESS;
 }
