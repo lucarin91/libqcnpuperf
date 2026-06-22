@@ -77,6 +77,33 @@ target_compile_options(qcnpuperf PRIVATE
 )
 
 # ------------------------------------------------------------
+# Static variant of the library (used by the CLI so it does
+# not need to ship libqcnpuperf.so separately)
+# ------------------------------------------------------------
+
+add_library(qcnpuperf_static STATIC
+    src/qcom_dsp.c
+    src/dspquery_stub.c
+)
+
+set_target_properties(qcnpuperf_static PROPERTIES OUTPUT_NAME qcnpuperf)
+
+target_include_directories(qcnpuperf_static
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+        ${FASTRPC_INCLUDE_DIR}
+)
+
+target_link_directories(qcnpuperf_static PRIVATE /usr/local/lib)
+
+target_link_libraries(qcnpuperf_static
+    PRIVATE
+        ${FASTRPC_LIBRARY}
+        bsd
+)
+
+# ------------------------------------------------------------
 # Optional sample app (ncurses)
 # ------------------------------------------------------------
 if(QCNPU_PERF_BUILD_CLI)
@@ -92,8 +119,11 @@ if(QCNPU_PERF_BUILD_CLI)
     )
 
     target_link_libraries(qcnpuperf_cli PRIVATE
-      qcnpuperf
-      ${CURSES_LIBRARIES}
+      -Wl,-Bstatic
+      qcnpuperf_static
+      -lncurses -ltinfo -lbsd -lmd -lyaml
+      -Wl,-Bdynamic
+      -lcdsprpc
     )
 
     # Optional: install the sample binary
